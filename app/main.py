@@ -1,70 +1,52 @@
 from fastapi import FastAPI
-import sqlite3
-import os
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = FastAPI()
 
-DB_PATH = "/data/ranking.db"
+cred = credentials.Certificate("/app/firebase-key.json")
+firebase_admin.initialize_app(cred)
 
-def get_conn():
-    return sqlite3.connect(DB_PATH)
-
-def init_db():
-    os.makedirs("/data", exist_ok=True)
-    conn = get_conn()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_scores (
-            user_id TEXT PRIMARY KEY,
-            score REAL NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
+db = firestore.client()
 
 @app.get("/")
 def root():
-    return {"status": "ok"}
+    return {"status": "ok", "database": "firebase"}
 
 @app.post("/score")
-def update_score(user_id: str, score: float):
-    conn = get_conn()
-    cursor = conn.cursor()
+def update_score(user_id: str, score: int):
+    user_ref = db.collection("user_scores").document(user_id)
 
-    cursor.execute("""
-        INSERT INTO user_scores (user_id, score, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(user_id)
-        DO UPDATE SET
-            score = excluded.score,
-            updated_at = CURRENT_TIMESTAMP
-    """, (user_id, score))
+    user_ref.set({
+        "user_id": user_id,
+        "score": score
+    }, merge=True)
 
-    conn.commit()
-    conn.close()
-
-    return {"status": "updated", "user": user_id, "score": score}
+    return {
+        "status": "updated",
+        "user_id": user_id,
+        "score": score
+    }
 
 @app.get("/leaderboard")
 def get_leaderboard():
-    conn = get_conn()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    docs = (
+        db.collection("user_scores")
+        .order_by("score", direction=firestore.Query.DESCENDING)
+        .limit(10)
+        .stream()
+    )
 
-    cursor.execute("""
-        SELECT
-            user_id,
-            score,
-            RANK() OVER (ORDER BY score DESC) AS user_rank
-        FROM user_scores
-        ORDER BY score DESC
-        LIMIT 10
-    """)
+    leaderboard = []
+    rank = 1
 
-    results = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    for doc in docs:
+        data = doc.to_dict()
+        leaderboard.append({
+            "rank": rank,
+            "user_id": data.get("user_id"),
+            "score": data.get("score")
+        })
+        rank += 1
 
-    return {"leaderboard": results}
+    return {"leaderboard": leaderboard}
