@@ -1,6 +1,7 @@
 services:
   db:
     image: mysql:8.0
+    restart: always
     environment:
       MYSQL_DATABASE: ranking_db
       MYSQL_USER: user
@@ -10,12 +11,16 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uuser", "-ppassword"]
+      timeout: 20s
+      retries: 10
 
   api:
     build: ./app
+    restart: always
     ports:
-      - "8080:8080"
+      - "8000:8000"
     depends_on:
-      - db
-    environment:
-      - DB_HOST=db
+      db:
+        condition: service_healthy
