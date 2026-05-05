@@ -6,3 +6,6 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/data
+    environment:
+      - FIREBASE_WEB_API_KEY=${FIREBASE_WEB_API_KEY}
+      - FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS:-/app/firebase-credentials.json}
