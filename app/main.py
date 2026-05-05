@@ -872,13 +872,13 @@ async def give_random_badge(req: GiveRandomBadgeRequest):
 @app.post("/admin/seed", tags=["Admin"])
 async def seed_initial_data():
     """Insère les données initiales (raretés + types de tâches)."""
-    # Raretés
+    # Raretés (du moins rare au plus rare : RR < SR < SSR < UR < SECRET)
     rarities = [
-        {"rarityName": "Common", "pointsGiven": 100},
-        {"rarityName": "Rare", "pointsGiven": 500},
-        {"rarityName": "Epic", "pointsGiven": 2000},
-        {"rarityName": "Legendary", "pointsGiven": 10000},
-        {"rarityName": "SSR", "pointsGiven": 50000},
+        {"rarityName": "RR", "pointsGiven": 100},
+        {"rarityName": "SR", "pointsGiven": 500},
+        {"rarityName": "SSR", "pointsGiven": 2000},
+        {"rarityName": "UR", "pointsGiven": 10000},
+        {"rarityName": "SECRET", "pointsGiven": 50000},
     ]
     for r in rarities:
         db.collection("rarities").add(r)
