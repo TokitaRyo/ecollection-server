@@ -18,7 +18,7 @@ def update_score(user_id: str, score: float):
     cursor = conn.cursor()
     # Upsert logic: Insert new or update existing score
     query ="""
-    INSERT INTO user_scores (User_id, score)
+    INSERT INTO user_scores (user_id, score)
     VALUES (%s, %s)
     ON DUPLICATE KEY UPDATE score = VALUES(score)
     """
