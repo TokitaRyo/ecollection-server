@@ -1,62 +1,52 @@
-from fastapi import FastAPI, HTTPException
-import mysql.connector
-import time
-import os
+from fastapi import FastAPI
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = FastAPI()
 
-# Database configuration using environment variables
-db_config = {
-    "host": "db", # This MUST match the service name in docker-compose
-    "user": "user",
-    "password": "password",
-    "database": "ranking_db"
-}
+cred = credentials.Certificate("/app/firebase-key.json")
+firebase_admin.initialize_app(cred)
 
-def get_db_connection():
-    """Retries connection until MySQL is ready."""
-    while True:
-        try:
-            conn = mysql.connector.connect(**db_config)
-            return conn
-        except mysql.connector.Error as err:
-            print(f"Database not ready yet... {err}")
-            time.sleep(2)
+db = firestore.client()
+
+@app.get("/")
+def root():
+    return {"status": "ok", "database": "firebase"}
 
 @app.post("/score")
-def update_score(user_id: str, score: float):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        query = """
-        INSERT INTO user_scores (user_id, score) 
-        VALUES (%s, %s) 
-        ON DUPLICATE KEY UPDATE score = VALUES(score)
-        """
-        cursor.execute(query, (user_id, score))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return {"status": "success", "user": user_id, "score": score}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def update_score(user_id: str, score: int):
+    user_ref = db.collection("user_scores").document(user_id)
+
+    user_ref.set({
+        "user_id": user_id,
+        "score": score
+    }, merge=True)
+
+    return {
+        "status": "updated",
+        "user_id": user_id,
+        "score": score
+    }
 
 @app.get("/leaderboard")
 def get_leaderboard():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        # SQL Window function for ranking
-        query = """
-        SELECT user_id, score, 
-               RANK() OVER (ORDER BY score DESC) as user_rank 
-        FROM user_scores 
-        LIMIT 10
-        """
-        cursor.execute(query)
-        results = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return {"leaderboard": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    docs = (
+        db.collection("user_scores")
+        .order_by("score", direction=firestore.Query.DESCENDING)
+        .limit(10)
+        .stream()
+    )
+
+    leaderboard = []
+    rank = 1
+
+    for doc in docs:
+        data = doc.to_dict()
+        leaderboard.append({
+            "rank": rank,
+            "user_id": data.get("user_id"),
+            "score": data.get("score")
+        })
+        rank += 1
+
+    return {"leaderboard": leaderboard}
