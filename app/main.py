@@ -50,3 +50,34 @@ def get_leaderboard():
         rank += 1
 
     return {"leaderboard": leaderboard}
+
+POINTS = {
+    "recycling": 10,
+    "vegetarian_meal": 15,
+    "walking": 20,
+}
+
+@app.post("/action")
+def log_action(user_id: str, action: str):
+    pts = POINTS.get(action, 5)
+
+    ref = db.collection("user_scores").document(user_id)
+    snap = ref.get()
+
+    data = snap.to_dict() if snap.exists else {}
+    current = data.get("score", 0)
+
+    new_score = current + pts
+
+    ref.set({
+        "user_id": user_id,
+        "score": new_score,
+        "last_action": action
+    }, merge=True)
+
+    return {
+        "user_id": user_id,
+        "action": action,
+        "added": pts,
+        "total": new_score
+    }
